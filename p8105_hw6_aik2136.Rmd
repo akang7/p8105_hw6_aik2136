@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(modelr)
 library(purrr)
+library(patchwork)
 ```
 
 ### Problem 1
@@ -48,3 +49,95 @@ balt_model %>%
 ```
 
 In Baltimore, the odds of solving a non-White homicide victim's case is 0.44 times the odds of solving a White homicide victim's case (95% CI: 0.31-0.62).
+
+
+Now run `glm` for each of the cities in your dataset, and extract the adjusted odds ratio (and CI) for solving homicides comparing non-white victims to white victims. Do this within a “tidy” pipeline, making use of `purrr::map`, list columns, and unnest as necessary to create a dataframe with estimated ORs and CIs for each city. Create a plot that shows the estimated ORs and CIs for each city. Organize cities according to estimated OR, and comment on the plot.
+
+```{r all_cities_model_1}
+homicide_data %>% 
+  group_by(city_state) %>% 
+  nest() %>% 
+  mutate(logit_all = map(data, ~glm(solved ~ victim_sex + victim_race + victim_age, family = binomial, data = .x)), 
+         logit_all = map(logit_all, broom::tidy)) %>% 
+  select(-data) %>% 
+  unnest() %>% 
+  filter(term == "victim_racenon-White") %>% 
+  mutate(or = exp(estimate), 
+         or_lower = exp(estimate - 1.96*std.error), 
+         or_upper = exp(estimate + 1.96*std.error), 
+         city_state = fct_reorder(city_state, estimate)) %>% 
+  select(city_state, or, or_lower, or_upper) %>% 
+  ggplot(aes(x = city_state, y = or)) + 
+  geom_point() + 
+  geom_errorbar(aes(ymin = or_lower, ymax = or_upper)) + 
+  geom_hline(yintercept = 1.0, linetype = "dashed", color = "blue") + 
+  coord_flip() + 
+  labs(title = "ORs for solving non-White homicide vs. White homicide in various cities", 
+       y = "Odds ratio", 
+       x = "Location")
+```
+
+
+We see that Tampa, FL, Birmingham, AL, and Durham, NC report the greatest odds ratios, which are all greater than the null value of 1. This shows that the odds of solving a non-white homicide victim's case are greater than the odds of solving a white homicide victim's case. However, this association is not significant because of the wide confidence intervals that include the null value.
+
+On the other hand, we see that Boston, MA, Omaha, NE, Oakland, CA, Pittsburgh, PA and Cincinnati, OH (in ascending order) report odds ratios less than 1, which indicates that the odds of solving a non-white homicide victim's case are less than the odds of solving a white homicide victim's case, with significance, since all of the confidence intervals do not include the null value of 1.
+
+In general, cities with a large number of homicides (e.g. Baltimore and Chicago) have narrower confidence intervals, while cities with fewer homicides tend to have wide confidence intervals. When we have more data, we most likely have less variability, which means that our standard errors tend to be smaller and that our confidence intervals should be narrower.
+
+### Problem 2
+
+In this probelm, you will analyze data gathered to understand the effects of several variables on a child’s birthweight.
+
+```{r load_clean_2}
+bweight = read_csv("data/birthweight.csv") %>% 
+  janitor::clean_names()
+
+# checking for missing values using 
+# sum(is.na(bweight))
+# no missing values
+
+bweight = bweight %>%  
+  mutate(babysex = as.factor(babysex), 
+         frace = as.factor(frace), 
+         malform = as.factor(malform), 
+         mrace = as.factor(mrace))
+```
+
+After importing the data, I checked for missing data. There is no missing data in the data frame. The columns that seemed appropriate for conversion from numeric values to factor variable where dichotomous or categorical variables (not appropriately continous). I converted baby's sex, father's race, the indicator of a malformation, and mother's race to factors using `as.factor`. 
+
+##### Exploratory plots
+```{r exploratory_2}
+hist = bweight %>% 
+  ggplot(aes(x = bwt)) + 
+  geom_histogram() + 
+  labs(x = "Birthweight", 
+       y = "Count")
+
+box = bweight %>% 
+  ggplot(aes(y = bwt)) + 
+  geom_boxplot() + 
+  labs(y = "Birthweight")
+
+wrap_elements(hist + box) + ggtitle("Histogram and boxplot of infant birthweight")
+```
+
+If we examine both the histogram and boxplot of infant birth weight, birth weight appears to be normally distributed but, there seem to be many outliers.
+
+```{r}
+t_num <- select_if(bweight, is.numeric)
+
+# calculating correlation coefficients for the numeric variables and putting in a table
+corr <- list()
+
+for (i in 1:ncol(wt_num)) {
+  corr[[i]] <- cor(wt_num$bwt, wt_num[i])
+}
+
+as.data.frame(corr) %>% 
+  gather(key = var, value = correlation) %>% 
+  filter(abs(correlation) > 0.2, 
+         var != "bwt") %>% 
+  knitr::kable(digits = 3, 
+               col.names = c("Variable", "Correlation"))
+```
+
