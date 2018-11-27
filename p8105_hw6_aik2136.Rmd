@@ -123,21 +123,22 @@ wrap_elements(hist + box) + ggtitle("Histogram and boxplot of infant birthweight
 
 If we examine both the histogram and boxplot of infant birth weight, birth weight appears to be normally distributed but, there seem to be many outliers.
 
+Calculating correlation coefficients:
+
 ```{r}
-t_num <- select_if(bweight, is.numeric)
+bweight_num = select_if(bweight, is.numeric)
 
-# calculating correlation coefficients for the numeric variables and putting in a table
-corr <- list()
+corr_values = list()
 
-for (i in 1:ncol(wt_num)) {
-  corr[[i]] <- cor(wt_num$bwt, wt_num[i])
+for (i in 1:ncol(bweight_num)) {
+  corr_values[[i]] = cor(bweight_num$bwt, bweight_num[i])
 }
 
-as.data.frame(corr) %>% 
+as.data.frame(corr_values) %>% 
   gather(key = var, value = correlation) %>% 
   filter(abs(correlation) > 0.2, 
          var != "bwt") %>% 
-  knitr::kable(digits = 3, 
+  knitr::kable(digits = 4, 
                col.names = c("Variable", "Correlation"))
 ```
 
