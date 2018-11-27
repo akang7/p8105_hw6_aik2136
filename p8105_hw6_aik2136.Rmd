@@ -11,6 +11,8 @@ library(tidyverse)
 library(modelr)
 library(purrr)
 library(patchwork)
+
+theme_set(theme_bw())
 ```
 
 ### Problem 1
@@ -125,7 +127,7 @@ If we examine both the histogram and boxplot of infant birth weight, birth weigh
 
 Calculating correlation coefficients:
 
-```{r}
+```{r correlation_2}
 bweight_num = select_if(bweight, is.numeric)
 
 corr_values = list()
@@ -142,3 +144,74 @@ as.data.frame(corr_values) %>%
                col.names = c("Variable", "Correlation"))
 ```
 
+The table above shows the variables that have correlation coefficient greater than 0.2. These variables may have a positive, linear relationship with birthweight. These correlation coefficients will help us with our model building process 
+
+### Model Building
+
+*Propose a regression model for birthweight. This model may be based on a hypothesized structure for the factors that underly birthweight, on a data-driven model-building process, or a combination of the two. Describe your modeling process and show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.*  
+
+I will be incorporating the above "data analysis" (correlation coefficients) with hypothesized variables that I believe influence birthweight to build my model. The hypothesized variables I chose to include had "clinical significance". From the "analysis" above using correlation coefficients, I chose to include baby's length at birth (`blength`), head circumference (`blength`), gestational age (`gaweeks`), and mother's weight gain during pregnancy (`wtgain`), as these factors can influence baby's birthweight. I did not include mother's weight at delivery (`delwt`) because the average amount of weight gained by the mother during pregnancy seemed to be a more important predictor. I also included average number of cigarettes smoked during the pregnancy, sex of baby, and SES, which was measured through family monthly income. I did not want to include too many predictors, and I did not explore interactions due to issues with interpretability.
+
+```{r model_2}
+model = bweight %>% 
+  lm(bwt ~ blength + bhead + gaweeks + wtgain + smoken + 
+       babysex + fincome, data = .) 
+
+bweight %>% 
+  add_predictions(model) %>% 
+  add_residuals(model) %>% 
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point() + 
+  geom_smooth(se = FALSE) + 
+  labs(title = "Predicted values vs. residuals plot", 
+       x = "Predicted value", 
+       y = "Residuals")
+
+```
+
+There seems to be some clustering as well as outliers/highly influential points when I plot predicted values against residuals. It appears that the model poorly predicts low birthweights.
+
+```{r comparing_models_2}
+cv_bweight = crossv_mc(bweight, 100)
+
+cv_bweight = cv_bweight %>% 
+  mutate(my_model = map(train, ~lm(bwt ~ blength + bhead + gaweeks + wtgain +
+                                     smoken + babysex + fincome, data = .x)),
+         main_model = map(train, ~lm(bwt ~ blength + gaweeks, data = .x)), 
+         interact_model = map(train, ~lm(bwt ~ bhead + blength + babysex +
+                            bhead*blength + blength*babysex + bhead*babysex +
+                              bhead*blength*babysex, data = .x))) %>% 
+  mutate(rmse_my_model = map2_dbl(my_model, test, ~rmse(model = .x, 
+                                                        data = .y)),
+         rmse_main_model = map2_dbl(main_model, test, ~rmse(model = .x, 
+                                                      data = .y)),
+         rmse_interaction_model = map2_dbl(interact_model, test, 
+                                     ~rmse(model = .x, data = .y)))
+
+cv_bweight %>% 
+  select(starts_with("rmse")) %>% 
+  gather(key = model, value = rmse) %>% 
+  mutate(model = str_replace(model, "rmse_", ""),
+         model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + 
+  geom_violin() + 
+  labs(title = "Violin plots of RMSE for selected models", 
+       x = "Model", 
+       y = "RMSE")
+
+```
+
+```{r table_rmse}
+cv_bweight %>%  
+  select(starts_with("rmse")) %>% 
+  gather(key = model, value = rmse) %>% 
+  mutate(model = str_replace(model, "rmse_", ""),
+         model = fct_inorder(model)) %>% 
+  group_by(model) %>% 
+  summarize(mean_rmse = mean(rmse)) %>% 
+  rename("Model" = model, 
+         "Mean RMSE" = mean_rmse) %>% 
+  knitr::kable(digits = 4)
+```
+
+The above plot visualizes violin plots for the RMSE of my proposed model, the main effects model, and the interaction model. Based on these plots, I would choose my model over the other two. However, I would consider adding the interaction terms that were specified in the interaction model.
