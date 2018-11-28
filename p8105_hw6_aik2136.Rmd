@@ -123,7 +123,7 @@ box = bweight %>%
 wrap_elements(hist + box) + ggtitle("Histogram and boxplot of infant birthweight")
 ```
 
-If we examine both the histogram and boxplot of infant birth weight, birth weight appears to be normally distributed but, there seem to be many outliers.
+If we examine both the histogram and boxplot of infant birth weight, birth weight appears to be normally distributed, but there seem to be many outliers.
 
 Calculating correlation coefficients:
 
@@ -214,4 +214,4 @@ cv_bweight %>%
   knitr::kable(digits = 4)
 ```
 
-The above plot visualizes violin plots for the RMSE of my proposed model, the main effects model, and the interaction model. Based on these plots, I would choose my model over the other two. However, I would consider adding the interaction terms that were specified in the interaction model.
+The above plot visualizes violin plots for the RMSE of my proposed model, the main effects model, and the interaction model. Based on these plots (which display RMSE values), I would choose my model over the other two. However, I would consider adding the interaction terms that were specified in the interaction model.
