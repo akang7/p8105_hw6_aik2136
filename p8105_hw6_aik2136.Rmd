@@ -19,7 +19,7 @@ theme_set(theme_bw())
 
 Create a `city_state` variable (e.g. “Baltimore, MD”), and a binary variable indicating whether the homicide is solved. Omit cities Dallas, TX; Phoenix, AZ; and Kansas City, MO – these don’t report victim race. Also omit Tulsa, AL – this is a data entry mistake. Modifiy `victim_race` to have categories white and `non-white`, with `white` as the reference category. Be sure that `victim_age` is numeric.
 
-```{r import_data_1}
+```{r import_data_1, message = FALSE, warning = FALSE}
 homicide_data = 
   read_csv("https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv") %>% 
   janitor::clean_names() %>% 
@@ -47,6 +47,10 @@ balt_model %>%
          OR_Upper_Bound = exp(estimate + (1.96 * std.error))) %>% 
   filter(term == "victim_racenon-White") %>% 
   select(OR, OR_Lower_Bound, OR_Upper_Bound, p.value) %>% 
+  rename("Odds Ratio" = OR, 
+         "OR Lower Bound" = OR_Lower_Bound, 
+         "OR Upper Bound" = OR_Upper_Bound,
+         "P-value" = p.value) %>% 
   knitr::kable(digits = 4)
 ```
 
@@ -64,18 +68,18 @@ homicide_data %>%
   select(-data) %>% 
   unnest() %>% 
   filter(term == "victim_racenon-White") %>% 
-  mutate(or = exp(estimate), 
-         or_lower = exp(estimate - 1.96*std.error), 
-         or_upper = exp(estimate + 1.96*std.error), 
+  mutate(OR = exp(estimate), 
+         OR_Lower_Bound = exp(estimate - 1.96*std.error), 
+         OR_Upper_Bound = exp(estimate + 1.96*std.error), 
          city_state = fct_reorder(city_state, estimate)) %>% 
-  select(city_state, or, or_lower, or_upper) %>% 
-  ggplot(aes(x = city_state, y = or)) + 
+  select(city_state, OR, OR_Lower_Bound, OR_Upper_Bound) %>% 
+  ggplot(aes(x = city_state, y = OR)) + 
   geom_point() + 
-  geom_errorbar(aes(ymin = or_lower, ymax = or_upper)) + 
-  geom_hline(yintercept = 1.0, linetype = "dashed", color = "blue") + 
+  geom_errorbar(aes(ymin = OR_Lower_Bound, ymax = OR_Upper_Bound)) + 
+  geom_hline(yintercept = 1.0, color = "red") + 
   coord_flip() + 
   labs(title = "ORs for solving non-White homicide vs. White homicide in various cities", 
-       y = "Odds ratio", 
+       y = "Odds Ratio", 
        x = "Location")
 ```
 
@@ -90,13 +94,13 @@ In general, cities with a large number of homicides (e.g. Baltimore and Chicago)
 
 In this probelm, you will analyze data gathered to understand the effects of several variables on a child’s birthweight.
 
-```{r load_clean_2}
+```{r load_clean_2, message = FALSE}
 bweight = read_csv("data/birthweight.csv") %>% 
   janitor::clean_names()
 
 # checking for missing values using 
 # sum(is.na(bweight))
-# no missing values
+# Given that the sum of "NA"s is 0, there is no missing data
 
 bweight = bweight %>%  
   mutate(babysex = as.factor(babysex), 
@@ -108,26 +112,26 @@ bweight = bweight %>%
 After importing the data, I checked for missing data. There is no missing data in the data frame. The columns that seemed appropriate for conversion from numeric values to factor variable where dichotomous or categorical variables (not appropriately continous). I converted baby's sex, father's race, the indicator of a malformation, and mother's race to factors using `as.factor`. 
 
 ##### Exploratory plots
-```{r exploratory_2}
+```{r exploratory_2, message = FALSE}
 hist = bweight %>% 
   ggplot(aes(x = bwt)) + 
   geom_histogram() + 
-  labs(x = "Birthweight", 
+  labs(x = "Birthweight (grams)", 
        y = "Count")
 
 box = bweight %>% 
   ggplot(aes(y = bwt)) + 
   geom_boxplot() + 
-  labs(y = "Birthweight")
+  labs(y = "Birthweight (grams)")
 
-wrap_elements(hist + box) + ggtitle("Histogram and boxplot of infant birthweight")
+wrap_elements(hist + box) + ggtitle("Histogram and boxplot of infant birthweight in grams")
 ```
 
 If we examine both the histogram and boxplot of infant birth weight, birth weight appears to be normally distributed, but there seem to be many outliers.
 
 Calculating correlation coefficients:
 
-```{r correlation_2}
+```{r correlation_2, warning = FALSE}
 bweight_num = select_if(bweight, is.numeric)
 
 corr_values = list()
@@ -150,9 +154,9 @@ The table above shows the variables that have correlation coefficient greater th
 
 *Propose a regression model for birthweight. This model may be based on a hypothesized structure for the factors that underly birthweight, on a data-driven model-building process, or a combination of the two. Describe your modeling process and show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.*  
 
-I will be incorporating the above "data analysis" (correlation coefficients) with hypothesized variables that I believe influence birthweight to build my model. The hypothesized variables I chose to include had "clinical significance". From the "analysis" above using correlation coefficients, I chose to include baby's length at birth (`blength`), head circumference (`blength`), gestational age (`gaweeks`), and mother's weight gain during pregnancy (`wtgain`), as these factors can influence baby's birthweight. I did not include mother's weight at delivery (`delwt`) because the average amount of weight gained by the mother during pregnancy seemed to be a more important predictor. I also included average number of cigarettes smoked during the pregnancy, sex of baby, and SES, which was measured through family monthly income. I did not want to include too many predictors, and I did not explore interactions due to issues with interpretability.
+I will be incorporating the above "data analysis" (correlation coefficients) with hypothesized variables that I believe influence birthweight to build my model. The hypothesized variables I chose to include were "clinically important". From the "analysis" above using correlation coefficients, I chose to include baby's length at birth (`blength`), head circumference (`blength`), gestational age (`gaweeks`), and mother's weight gain during pregnancy (`wtgain`), as these factors can influence baby's birthweight. I did not include mother's weight at delivery (`delwt`) because the average amount of weight gained by the mother during pregnancy seemed to be a more important predictor. I also included average number of cigarettes smoked during the pregnancy, sex of baby, and SES, which was measured through family monthly income. I did not want to include too many predictors, and I did not explore interactions due to issues with interpretability.
 
-```{r model_2}
+```{r model_2, message = FALSE}
 model = bweight %>% 
   lm(bwt ~ blength + bhead + gaweeks + wtgain + smoken + 
        babysex + fincome, data = .) 
@@ -214,4 +218,4 @@ cv_bweight %>%
   knitr::kable(digits = 4)
 ```
 
-The above plot visualizes violin plots for the RMSE of my proposed model, the main effects model, and the interaction model. Based on these plots (which display RMSE values), I would choose my model over the other two. However, I would consider adding the interaction terms that were specified in the interaction model.
+The above plot visualizes violin plots for the RMSE of my proposed model, the main effects model, and the interaction model. Based on these plots (which display RMSE values), I would choose my model over the other two. However, I would consider adding the interaction terms that were specified in the interaction model. Overall, more analysis and tests are needed for model selection, since we decided based on RMSE.
